@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-provider-azurerm/internal/acceptance"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/acceptance/check"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/features"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
 	"github.com/hashicorp/terraform-provider-azurerm/utils"
 )
@@ -59,6 +60,13 @@ func testAccNetworkConnectionMonitor_addressComplete(t *testing.T) {
 	data.ResourceSequentialTest(t, r, []acceptance.TestStep{
 		{
 			Config: r.completeAddressConfig(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+			),
+		},
+		data.ImportStep(),
+		{
+			Config: r.outputWorkspaceResourceIdsRemoved(data),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
@@ -293,6 +301,10 @@ resource "azurerm_virtual_network" "test" {
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.test.location
   resource_group_name = azurerm_resource_group.test.name
+
+  lifecycle {
+    ignore_changes = [subnet]
+  }
 }
 
 resource "azurerm_subnet" "test" {
@@ -448,6 +460,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseConfig(data), data.RandomInteger)
 }
@@ -525,6 +541,139 @@ resource "azurerm_network_connection_monitor" "test" {
 `, r.baseConfig(data), data.RandomInteger, data.RandomInteger)
 }
 
+func (r NetworkConnectionMonitorResource) outputWorkspaceResourceIdsRemoved(data acceptance.TestData) string {
+	if !features.FourPointOhBeta() {
+		return fmt.Sprintf(`
+%s
+
+resource "azurerm_network_connection_monitor" "test" {
+  name               = "acctest-CM-%d"
+  network_watcher_id = azurerm_network_watcher.test.id
+  location           = azurerm_network_watcher.test.location
+
+  endpoint {
+    name               = "source"
+    target_resource_id = azurerm_virtual_machine.src.id
+
+    filter {
+      item {
+        address = azurerm_virtual_machine.src.id
+        type    = "AgentAddress"
+      }
+
+      type = "Include"
+    }
+  }
+
+  endpoint {
+    name    = "destination"
+    address = "pluginsdk.io"
+  }
+
+  test_configuration {
+    name                      = "tcp"
+    protocol                  = "Tcp"
+    test_frequency_in_seconds = 40
+    preferred_ip_version      = "IPv4"
+
+    tcp_configuration {
+      port                      = 80
+      destination_port_behavior = "ListenIfAvailable"
+    }
+
+    success_threshold {
+      checks_failed_percent = 50
+      round_trip_time_ms    = 40
+    }
+  }
+
+  test_group {
+    name                     = "testtg"
+    destination_endpoints    = ["destination"]
+    source_endpoints         = ["source"]
+    test_configuration_names = ["tcp"]
+    enabled                  = true
+  }
+
+  notes = "testNote"
+
+  output_workspace_resource_ids = []
+
+  tags = {
+    ENv = "Test"
+  }
+
+  depends_on = [azurerm_virtual_machine_extension.src]
+}
+`, r.baseConfig(data), data.RandomInteger)
+	}
+	return fmt.Sprintf(`
+%s
+
+resource "azurerm_network_connection_monitor" "test" {
+  name               = "acctest-CM-%d"
+  network_watcher_id = azurerm_network_watcher.test.id
+  location           = azurerm_network_watcher.test.location
+
+  endpoint {
+    name               = "source"
+    target_resource_id = azurerm_virtual_machine.src.id
+
+    filter {
+      item {
+        address = azurerm_virtual_machine.src.id
+        type    = "AgentAddress"
+      }
+
+      type = "Include"
+    }
+  }
+
+  endpoint {
+    name    = "destination"
+    address = "pluginsdk.io"
+  }
+
+  test_configuration {
+    name                      = "tcp"
+    protocol                  = "Tcp"
+    test_frequency_in_seconds = 40
+    preferred_ip_version      = "IPv4"
+
+    tcp_configuration {
+      port                      = 80
+      destination_port_behavior = "ListenIfAvailable"
+    }
+
+    success_threshold {
+      checks_failed_percent = 50
+      round_trip_time_ms    = 40
+    }
+  }
+
+  test_group {
+    name                     = "testtg"
+    destination_endpoints    = ["destination"]
+    source_endpoints         = ["source"]
+    test_configuration_names = ["tcp"]
+    enabled                  = true
+  }
+
+  notes = "testNote"
+
+  tags = {
+    ENv = "Test"
+  }
+
+  depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
+}
+`, r.baseConfig(data), data.RandomInteger)
+}
+
 func (r NetworkConnectionMonitorResource) basicVmConfig(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 %s
@@ -561,6 +710,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseWithDestConfig(data), data.RandomInteger)
 }
@@ -602,6 +755,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseWithDestConfig(data), data.RandomInteger)
 }
@@ -657,6 +814,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseWithDestConfig(data), data.RandomInteger)
 }
@@ -692,6 +853,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseConfig(data), data.RandomInteger)
 }
@@ -732,6 +897,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseConfig(data), data.RandomInteger)
 }
@@ -772,6 +941,10 @@ resource "azurerm_network_connection_monitor" "import" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.basicAddressConfig(data))
 }
@@ -821,6 +994,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseWithDestConfig(data), data.RandomInteger)
 }
@@ -861,6 +1038,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseConfig(data), data.RandomInteger)
 }
@@ -905,6 +1086,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseConfig(data), data.RandomInteger)
 }
@@ -956,6 +1141,10 @@ resource "azurerm_network_connection_monitor" "test" {
   }
 
   depends_on = [azurerm_virtual_machine_extension.src]
+
+  lifecycle {
+    ignore_changes = [output_workspace_resource_ids]
+  }
 }
 `, r.baseConfig(data), data.RandomInteger, data.RandomInteger)
 }
